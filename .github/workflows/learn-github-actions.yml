@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - run: pwd 
-    - run: top 
+    - run: ifconfig 
 
    jobs2:
     runs-on: windows-latest
