@@ -60,7 +60,7 @@ jobs:
     - name: Terraform Plan (Destroy)
       id: plan-destroy
       run: |
-        terraform plan -destroy -input=false -no-color \
+        terraform plan -destroy -verbose -input=false -no-color \
         -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
         -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
         -var="vpc_description=${{ github.event.inputs.vpc_description }}"
@@ -82,7 +82,7 @@ jobs:
     - name: Terraform Destroy
       id: destroy
       run: |
-        terraform destroy -auto-approve -input=false \
+        terraform destroy -verbose -auto-approve -input=false \
         -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
         -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
         -var="vpc_description=${{ github.event.inputs.vpc_description }}"
