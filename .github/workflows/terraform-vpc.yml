@@ -38,10 +38,7 @@ jobs:
     - name: Terraform Plan
       id: plan
       run: |
-        terraform plan -input=false -no-color \
-        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+        terraform plan -input=false -no-color 
       working-directory: ./.github/terraform
       env:
         TF_VAR_alicloud_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
@@ -52,10 +49,7 @@ jobs:
       # if: github.event_name == 'workflow_dispatch'
       id: apply
       run: |
-        terraform apply -auto-approve -input=false \
-        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+        terraform apply -auto-approve -input=false 
       working-directory: ./.github/terraform
       env:
         TF_VAR_alicloud_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
