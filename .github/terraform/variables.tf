@@ -18,5 +18,5 @@ variable "vpc_description" {
 variable "region" {
   description = "Alibaba Cloud region"
   type        = string
-  default     = "cn-beijing"
+  default     = "cn-shanghai"
 }
