@@ -7,8 +7,10 @@ jobs:
     steps:
     - run: |
         pwd 
-        ifconfig
+        ifconfig 
         echo "${{ env.RUNNER_OS }}" 
+        if: env.RUNNER_OS = 'test-varible-labels'
+        echo "哈哈"
    
 
 
