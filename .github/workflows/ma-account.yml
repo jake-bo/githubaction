@@ -1,4 +1,4 @@
-name: Deploy Alibaba Cloud VPC with Terraform
+name: Deploy Alibaba Cloud VPC Terraform
 
 on:
   push:
