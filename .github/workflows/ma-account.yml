@@ -26,9 +26,9 @@ jobs:
       id: init
       run: terraform init
       env:
-        TF_VAR_ALICLOUD_ACCESS_KEY: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY }}
-        TF_VAR_ALICLOUD_SECRET_KEY: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
-        TF_VAR_ALICLOUD_ROLE_ARN: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
+        TF_VAR_alicloud_access_key: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY  }}
+        TF_VAR_alicloud_secret_key: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
+        TF_VAR_alicloud_role_arn: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
       working-directory: ./.github/terraform-vpc
 
     - name: Terraform Validate
@@ -41,12 +41,9 @@ jobs:
         terraform plan -input=false -no-color 
       working-directory: ./.github/terraform-vpc
       env:
-        # TF_VAR_ALICLOUD_ACCESS_KEY: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY }}
-        # TF_VAR_ALICLOUD_SECRET_KEY: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
-        # TF_VAR_ALICLOUD_ROLE_ARN: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
-        TF_VAR_alicloud_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-        TF_VAR_alicloud_secret_key: ${{ secrets.ALICLOUD_SECRET_KEY }}
-        TF_VAR_alicloud_role_arn: ${{ secrets.ALICLOUD_ROLE_ARN }}
+        TF_VAR_alicloud_access_key: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY  }}
+        TF_VAR_alicloud_secret_key: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
+        TF_VAR_alicloud_role_arn: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
 
     - name: Terraform Apply
       # if: github.event_name == 'workflow_dispatch'
@@ -55,6 +52,6 @@ jobs:
         terraform apply -auto-approve -input=false 
       working-directory: ./.github/terraform-vpc
       env:
-        TF_VAR_ALICLOUD_ACCESS_KEY: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY }}
-        TF_VAR_ALICLOUD_SECRET_KEY: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
-        TF_VAR_ALICLOUD_ROLE_ARN: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
+        TF_VAR_alicloud_access_key: ${{ secrets.MASTER_ALICLOUD_ACCESS_KEY  }}
+        TF_VAR_alicloud_secret_key: ${{ secrets.MASTER_ALICLOUD_SECRET_KEY }}
+        TF_VAR_alicloud_role_arn: ${{ secrets.LOGGING_ALICLOUD_ROLE_ARN }}
