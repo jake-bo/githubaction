@@ -47,6 +47,18 @@ jobs:
         ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
       working-directory: ./.github/terraform
 
+    - name: Check Terraform State
+      run: |
+        echo "=== 当前状态文件中的资源列表 ==="
+        terraform state list
+        echo -e "\n=== 显示完整状态详情 ==="
+        terraform show
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}      
+
     - name: Terraform Destroy
       id: destroy
       run: |
