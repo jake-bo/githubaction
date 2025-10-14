@@ -4,9 +4,11 @@ jobs:
    job1:
     runs-on: ubuntu-latest
     steps:
-    - run: pwd 
-    - run: ifconfig 
-    - run: echo "${{ env.RUNNER_OS }}"
+    - run: |
+        pwd 
+        ifconfig
+        echo "${{ env.RUNNER_OS }}" 
+   
 
 
    jobs2:
