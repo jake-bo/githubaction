@@ -1,12 +1,10 @@
-name: Deploy and Destroy Alibaba Cloud VPC with Terraform
+name: Destroy Alibaba Cloud VPC with Terraform
 
 on:
-  push:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       vpc_name:
-        description: 'VPC名称'
+        description: '要删除的VPC名称'
         required: true
         default: 'github-actions-vpc'
         type: string
@@ -20,113 +18,82 @@ on:
         required: false
         default: 'Created via GitHub Actions'
         type: string
-      action_type:
-        description: '操作类型'
+      confirmation:
+        description: '确认删除（请输入"DELETE"以确认）'
         required: true
-        default: 'deploy'
-        type: choice
-        options:
-          - deploy
-          - destroy
+        type: string
 
 env:
   TF_VAR_region: ${{ secrets.ALICLOUD_REGION }}
 
 jobs:
-  deploy:
-    name: 'Terraform Plan and Apply'
-    runs-on: ubuntu-latest
-    if: github.event.inputs.action_type == 'deploy'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.11.4'
-
-      - name: Terraform Format
-        id: fmt
-        run: terraform fmt -check
-        working-directory: ./.github/terraform
-
-      - name: Terraform Init
-        id: init
-        run: terraform init
-        env:
-          ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-          ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-          ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        working-directory: ./.github/terraform
-
-      - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
-        working-directory: ./.github/terraform
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -input=false -no-color \
-          -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-          -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-          -var="vpc_description=${{ github.event.inputs.vpc_description }}"
-        env:
-          ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-          ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-          ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        working-directory: ./.github/terraform
-
-      - name: Terraform Apply
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          terraform apply -auto-approve -input=false \
-          -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-          -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-          -var="vpc_description=${{ github.event.inputs.vpc_description }}"
-        env:
-          ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-          ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-          ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        working-directory: ./.github/terraform
-
   destroy:
-    name: 'Terraform Destroy'
+    name: 'Destroy VPC'
     runs-on: ubuntu-latest
-    if: github.event.inputs.action_type == 'destroy'
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.11.4'
+    - name: Verify confirmation
+      run: |
+        if [ "${{ github.event.inputs.confirmation }}" != "DELETE" ]; then
+          echo "删除操作未确认，工作流终止"
+          exit 1
+        fi
+        echo "删除操作已确认，继续执行..."
 
-      - name: Terraform Init
-        id: init-destroy
-        run: terraform init
-        env:
-          ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-          ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-          ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        working-directory: ./.github/terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '1.11.4'
 
-      - name: Confirm Destroy
-        run: echo "正在销毁VPC: ${{ github.event.inputs.vpc_name }}，此操作无法撤销！"
+    - name: Terraform Init
+      id: init
+      run: terraform init
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+      working-directory: ./.github/terraform
 
-      - name: Terraform Destroy
-        id: destroy
-        run: |
-          terraform destroy -auto-approve -input=false \
-          -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-          -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-          -var="vpc_description=${{ github.event.inputs.vpc_description }}"
-        env:
-          ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-          ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-          ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        working-directory: ./.github/terraform
+    - name: Terraform Plan (Destroy)
+      id: plan-destroy
+      run: |
+        terraform plan -destroy -input=false -no-color \
+        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+
+    - name: Confirm Destruction
+      run: |
+        echo "⚠️  ⚠️  ⚠️  警告：即将销毁以下资源 ⚠️  ⚠️  ⚠️"
+        echo "VPC名称: ${{ github.event.inputs.vpc_name }}"
+        echo "VPC网段: ${{ github.event.inputs.vpc_cidr }}"
+        echo "此操作将永久删除VPC及其相关资源，且无法撤销！"
+        echo "等待5秒..."
+        sleep 5
+
+    - name: Terraform Destroy
+      id: destroy
+      run: |
+        terraform destroy -auto-approve -input=false \
+        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+
+    - name: Destruction Complete
+      if: success()
+      run: |
+        echo "✅ VPC资源销毁完成"
+        echo "已删除的VPC: ${{ github.event.inputs.vpc_name }}"
