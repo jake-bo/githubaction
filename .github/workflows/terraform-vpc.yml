@@ -3,26 +3,26 @@ name: Deploy Alibaba Cloud VPC with Terraform
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:
-    inputs:
-      vpc_name:
-        description: 'VPC名称'
-        required: true
-        default: 'github-actions-vpc'
-        type: string
-      vpc_cidr:
-        description: 'VPC CIDR网段'
-        required: false
-        default: '172.16.0.0/16'
-        type: string
-      vpc_description:
-        description: 'VPC描述'
-        required: false
-        default: 'Created via GitHub Actions'
-        type: string
+  # workflow_dispatch:
+  #   inputs:
+  #     vpc_name:
+  #       description: 'VPC名称'
+  #       required: true
+  #       default: 'github-actions-vpc'
+  #       type: string
+  #     vpc_cidr:
+  #       description: 'VPC CIDR网段'
+  #       required: false
+  #       default: '172.16.0.0/16'
+  #       type: string
+  #     vpc_description:
+  #       description: 'VPC描述'
+  #       required: false
+  #       default: 'Created via GitHub Actions'
+  #       type: string
 
-env:
-  TF_VAR_region: ${{ secrets.ALICLOUD_REGION }}
+# env:
+#   TF_VAR_region: ${{ secrets.ALICLOUD_REGION }}
 
 jobs:
   terraform:
@@ -36,7 +36,7 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: '1.11.4'
+        terraform_version: '1.13.3'
 
     - name: Terraform Format
       id: fmt
