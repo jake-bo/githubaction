@@ -6,8 +6,12 @@ jobs:
     steps:
     - run: pwd 
     - run: ifconfig 
+    - run: echo "${{ env.RUNNER_OS }}"
+
 
    jobs2:
     runs-on: windows-latest
     steps:
     - run: node --version
+env:
+   RUNNER_OS: ${{ vars.RUNNER_OS }}
