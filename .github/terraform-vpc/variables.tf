@@ -1,6 +1,7 @@
 variable "vpc_name" {
   description = "The name of the VPC"
   type        = string
+  default     = "ma-account-vpc"
 }
 
 variable "vpc_cidr" {
