@@ -20,3 +20,22 @@ variable "region" {
   type        = string
   default     = "cn-shanghai"
 }
+
+
+variable "alicloud_access_key" {
+  description = "阿里云AccessKey"
+  type        = string
+  sensitive   = true
+}
+
+variable "alicloud_secret_key" {
+  description = "阿里云SecretKey"
+  type        = string
+  sensitive   = true
+}
+
+variable "alicloud_role_arn" {
+  description = "RAM角色ARN"
+  type        = string
+  sensitive   = true
+}
