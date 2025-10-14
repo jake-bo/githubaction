@@ -1,4 +1,4 @@
-name: Deploy and Destroy Alibaba Cloud VPC with Terraform
+name: Destroy Alibaba Cloud VPC with Terraform
 
 on:
   push:
