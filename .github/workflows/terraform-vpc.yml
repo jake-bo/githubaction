@@ -46,10 +46,13 @@ jobs:
       id: init
       run: terraform init
       env:
-        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-        # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+        # ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        # ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        # # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+        # ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+        TF_VAR_alicloud_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        TF_VAR_alicloud_secret_key: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        TF_VAR_alicloud_role_arn: ${{ secrets.ALICLOUD_ROLE_ARN }}
       working-directory: ./.github/terraform
 
     - name: Terraform Validate
@@ -65,21 +68,28 @@ jobs:
         -var="vpc_description=${{ github.event.inputs.vpc_description }}"
       working-directory: ./.github/terraform
       env:
-        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-        # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+        # ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        # ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        # # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+        # ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+        TF_VAR_alicloud_access_key: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        TF_VAR_alicloud_secret_key: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        TF_VAR_alicloud_role_arn: ${{ secrets.ALICLOUD_ROLE_ARN }}
 
-    - name: Terraform Apply
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        terraform apply -auto-approve -input=false \
-        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
-        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
-        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
-      working-directory: ./.github/terraform
-      env:
-        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
-        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-        # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
-        ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+    # - name: Terraform Apply
+    #   if: github.event_name == 'workflow_dispatch'
+    #   run: |
+    #     terraform apply -auto-approve -input=false \
+    #     -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+    #     -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+    #     -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+    #   working-directory: ./.github/terraform
+    #   env:
+    #     # ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+    #     # ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+    #     # # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+    #     # ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
+    #     ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+    #     ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+    #     # ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+    #     ALICLOUD_ROLE_ARN: ${{ secrets.ALICLOUD_ROLE_ARN }}
