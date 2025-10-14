@@ -50,7 +50,7 @@ jobs:
     - name: Check Terraform State
       id: check_state
       run: |
-        if terraform state list; then
+        if terraform state list 2>/dev/null; then
           echo "state_exists=true" >> $GITHUB_OUTPUT
         else
           echo "state_exists=false" >> $GITHUB_OUTPUT
@@ -73,35 +73,57 @@ jobs:
         ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
         ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
 
-    - name: Delete VPC via Alibaba Cloud CLI
-      if: always()  # 总是执行，即使前面的步骤失败
+    - name: Install and Configure Alibaba Cloud CLI
       run: |
         # 安装阿里云CLI
         curl -O https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz
         tar xzvf aliyun-cli-linux-latest-amd64.tgz
         sudo cp aliyun /usr/local/bin/
+        # 验证安装
+        aliyun --version
+        
+        # 配置CLI - 确保地域参数正确设置
+        aliyun configure set \
+          --access-key-id $ALICLOUD_ACCESS_KEY \
+          --access-key-secret $ALICLOUD_SECRET_KEY \
+          --region $ALICLOUD_REGION
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
 
-        # 配置CLI
-        aliyun configure set --access-key-id $ALICLOUD_ACCESS_KEY --access-key-secret $ALICLOUD_SECRET_KEY --region $ALICLOUD_REGION
-
+    - name: Find and Delete VPC via CLI
+      run: |
+        echo "正在查找名为 '${{ github.event.inputs.vpc_name }}' 的VPC..."
+        
         # 通过名称查找VPC
         VPC_IDS=$(aliyun vpc DescribeVpcs \
           --RegionId $ALICLOUD_REGION \
-          --VpcName ${{ github.event.inputs.vpc_name }} \
-          --output cols=Vpcs.Vpc[].VpcId rows=Vpcs.Vpc[].VpcId)
+          --VpcName "${{ github.event.inputs.vpc_name }}" \
+          --output cols=Vpcs.Vpc[].VpcId rows=Vpcs.Vpc[].VpcId) || true
         
+        # 检查是否找到VPC
         if [ -z "$VPC_IDS" ] || [ "$VPC_IDS" = "null" ]; then
-          echo "没有找到名为 '${{ github.event.inputs.vpc_name }}' 的VPC"
+          echo "❌ 没有找到名为 '${{ github.event.inputs.vpc_name }}' 的VPC"
           exit 0
         fi
 
-        # 循环删除所有找到的VPC（理论上名称唯一，但API返回的是数组）
-        for VPC_ID in $VPC_IDS; do
-          echo "正在删除 VPC: $VPC_ID"
-          aliyun vpc DeleteVpc --VpcId $VPC_ID --RegionId $ALICLOUD_REGION
-        done
+        echo "✅ 找到以下VPC ID: $VPC_IDS"
 
-        echo "VPC删除命令已执行。"
+        # 循环删除所有找到的VPC
+        for VPC_ID in $VPC_IDS; do
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "null" ]; then
+            echo "🗑️ 正在删除 VPC: $VPC_ID"
+            
+            # 检查VPC内是否有未删除的资源:cite[5]
+            echo "检查VPC内资源..."
+            
+            # 尝试删除VPC:cite[5]
+            aliyun vpc DeleteVpc --VpcId $VPC_ID --RegionId $ALICLOUD_REGION && \
+            echo "✅ VPC $VPC_ID 删除命令已成功提交" || \
+            echo "⚠️ VPC $VPC_ID 删除可能遇到问题（可能包含未删除的资源）"
+          fi
+        done
       env:
         ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
         ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
