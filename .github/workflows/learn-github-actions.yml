@@ -18,8 +18,9 @@ jobs:
     steps:
     - name: test  
       # run: node --version
-      run: echo "Running on main branch"
       if: ${{ env.TEST_NAME == 'jinbo' }}
+      run: echo "哈哈 真的可以"
+
 env:
    RUNNER_OS: ${{ vars.RUNNER_OS }}
    TEST_NAME: "jinbo"
