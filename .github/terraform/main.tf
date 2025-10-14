@@ -1,15 +1,3 @@
-terraform {
-  required_providers {
-    alicloud = {
-      source = "aliyun/alicloud"
-      version = "= 1.247.0"
-    }
-  }
-}
-
-provider "alicloud" {
-  region = var.region
-}
 
 resource "alicloud_vpc" "main" {
   vpc_name    = var.vpc_name
