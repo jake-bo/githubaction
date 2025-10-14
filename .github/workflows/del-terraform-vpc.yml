@@ -1,4 +1,4 @@
-name: destory Alibaba Cloud VPC with Terraform
+name: Deploy and Destroy Alibaba Cloud VPC with Terraform
 
 on:
   push:
@@ -26,7 +26,7 @@ env:
 
 jobs:
   terraform:
-    name: 'Terraform'
+    name: 'Terraform Plan and Apply'
     runs-on: ubuntu-latest
     
     steps:
@@ -42,14 +42,80 @@ jobs:
       id: fmt
       run: terraform fmt -check
 
-    - name: Terraform Destroy
-      id: destroy
-      run: terraform destroy
+    - name: Terraform Init
+      id: init
+      run: terraform init
       env:
         ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
         ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
         ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
       working-directory: ./.github/terraform
 
- 
- 
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      run: |
+        terraform plan -input=false -no-color \
+        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+
+    - name: Terraform Apply
+      if: github.event_name == 'workflow_dispatch'
+      run: |
+        terraform apply -auto-approve -input=false \
+        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+
+  destroy:
+    name: 'Terraform Destroy'
+    runs-on: ubuntu-latest
+    # 默认设置为手动触发，并添加确认步骤
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.vpc_name, 'destroy')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@vv3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '1.11.4'
+
+    - name: Terraform Init
+      id: init-destroy
+      run: terraform init
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+      working-directory: ./.github/terraform
+
+    - name: Confirm Destroy
+      run: echo "正在销毁VPC: ${{ github.event.inputs.vpc_name }}，此操作无法撤销！"
+
+    - name: Terraform Destroy
+      id: destroy
+      run: terraform destroy -auto-approve -input=false \
+        -var="vpc_name=${{ github.event.inputs.vpc_name }}" \
+        -var="vpc_cidr=${{ github.event.inputs.vpc_cidr }}" \
+        -var="vpc_description=${{ github.event.inputs.vpc_description }}"
+      working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
