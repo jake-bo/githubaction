@@ -48,23 +48,60 @@ jobs:
       working-directory: ./.github/terraform
 
     - name: Check Terraform State
+      id: check_state
       run: |
-        echo "=== 当前状态文件中的资源列表 ==="
-        terraform state list
-        echo -e "\n=== 显示完整状态详情 ==="
-        terraform show
+        if terraform state list; then
+          echo "state_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "state_exists=false" >> $GITHUB_OUTPUT
+        fi
       working-directory: ./.github/terraform
       env:
         ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
         ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
-        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}      
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
 
     - name: Terraform Destroy
-      id: destroy
+      id: tf_destroy
+      if: steps.check_state.outputs.state_exists == 'true'
       run: |
         terraform destroy -auto-approve -input=false \
         -var="vpc_name=${{ github.event.inputs.vpc_name }}"
       working-directory: ./.github/terraform
+      env:
+        ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
+        ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
+        ALICLOUD_REGION: ${{ secrets.ALICLOUD_REGION }}
+
+    - name: Delete VPC via Alibaba Cloud CLI
+      if: always()  # 总是执行，即使前面的步骤失败
+      run: |
+        # 安装阿里云CLI
+        curl -O https://aliyuncli.alicdn.com/aliyun-cli-linux-latest-amd64.tgz
+        tar xzvf aliyun-cli-linux-latest-amd64.tgz
+        sudo cp aliyun /usr/local/bin/
+
+        # 配置CLI
+        aliyun configure set --access-key-id $ALICLOUD_ACCESS_KEY --access-key-secret $ALICLOUD_SECRET_KEY --region $ALICLOUD_REGION
+
+        # 通过名称查找VPC
+        VPC_IDS=$(aliyun vpc DescribeVpcs \
+          --RegionId $ALICLOUD_REGION \
+          --VpcName ${{ github.event.inputs.vpc_name }} \
+          --output cols=Vpcs.Vpc[].VpcId rows=Vpcs.Vpc[].VpcId)
+        
+        if [ -z "$VPC_IDS" ] || [ "$VPC_IDS" = "null" ]; then
+          echo "没有找到名为 '${{ github.event.inputs.vpc_name }}' 的VPC"
+          exit 0
+        fi
+
+        # 循环删除所有找到的VPC（理论上名称唯一，但API返回的是数组）
+        for VPC_ID in $VPC_IDS; do
+          echo "正在删除 VPC: $VPC_ID"
+          aliyun vpc DeleteVpc --VpcId $VPC_ID --RegionId $ALICLOUD_REGION
+        done
+
+        echo "VPC删除命令已执行。"
       env:
         ALICLOUD_ACCESS_KEY: ${{ secrets.ALICLOUD_ACCESS_KEY }}
         ALICLOUD_SECRET_KEY: ${{ secrets.ALICLOUD_SECRET_KEY }}
