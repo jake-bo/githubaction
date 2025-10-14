@@ -16,6 +16,10 @@ jobs:
    jobs2:
     runs-on: windows-latest
     steps:
-    - run: node --version
+    - name: test  
+      # run: node --version
+      run: echo "Running on main branch"
+      if: ${{ env.TEST_NAME == 'jinbo' }}
 env:
    RUNNER_OS: ${{ vars.RUNNER_OS }}
+   TEST_NAME: "jinbo"
