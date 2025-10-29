@@ -22,17 +22,6 @@ on:
           - apply    # Deploy resources - 部署资源
           - update   # Update resources - 更新资源
           - destroy  # Destroy resources - 删除资源
-      Environment:
-        description: 'Target environment - 目标环境'
-        required: true
-        type: choice
-        options:
-          - dev      # Development environment - 开发环境
-          - prod     # Production environment - 生产环境
-            target_uid:
-        description: 'Select the account for terraform apply'
-        required: true
-        type: string
       infrastructure_json_params:
         description: 'require json'
         required: true
@@ -49,56 +38,86 @@ on:
         description: 'use for set secret'
         required: true
         type: string
-nt.inputs.Deployment }}" == "destroy" ]; then
-            echo "🗑️ Starting terragrunt destroy..."
-            terragrunt destroy -auto-approve -input=false 
-          fi
-
-  # Production environment approval phase - Manual approval required
-  # 生产环境审批阶段 - 需要人工审批
-  approval-prod:
-    name: Approval Required for Production
-    needs: build-and-test  # Depends on build-and-test job successful completion - 依赖 build-and-test job 成功完成
-    # Trigger condition: environment is prod and operation is apply and previous job succeeded
-    # 触发条件：环境为 prod 且操作为 apply 且前置job成功
-    if: |
-      github.event.inputs.Environment == 'prod' &&
-      github.event.inputs.Deployment == 'apply' &&
-      needs.build-and-test.result == 'success'
-    runs-on: standard-ghc
-    environment: prod  # Use prod environment configuration (approval rules set) - 使用 prod 环境配置（已设置审批规则）
-    
+        
+jobs: 
+  prod-init-plan-apply:
+    name: ${{ github.ref_name }} Branch Tasks
+    if: github.ref_name == 'main'
+    runs-on: platform
+    env:
+      RD: prod
+      OTS_RD: p
     steps:
-      - name: Wait for manual approval
-        run: echo "Prod deployment requires manual approval - 生产环境部署需要手动审批"
-
-  # Production environment deployment - Only executed after approval
-  # 生产环境部署 - 只有在审批通过后执行
-  deploy-prod:
-    name: Deploy Production
-    needs: 
-      - build-and-test    # Requires build and test success - 需要构建测试成功
-      - approval-prod     # Requires approval passed - 需要审批通过
-    # Trigger condition: environment is prod and operation is apply and all previous jobs succeeded
-    # 触发条件：环境为 prod 且操作为 apply 且所有前置job都成功
-    if: |
-      github.event.inputs.Environment == 'prod' &&
-      github.event.inputs.Deployment == 'apply' &&
-      needs.build-and-test.result == 'success' &&
-      needs.approval-prod.result == 'success'
-    runs-on: standard-ghc
-    # environment: production  # Use production environment configuration - 使用 production 环境配置
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Setup Terragrunt environment - 设置 Terragrunt 环境
-      - name: Setup Terragrunt
+      - name: Dynamic processing of inputs
+        id: set_secret_name
         run: |
-          # Install Terraform - 安装 Terraform
-          wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          sudo mv terraform /usr/local/bin/
-          
-          cd ${{ env.TERRAGRUNT_DIR }}
+          echo "secret_ak=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
+          echo "secret_sk=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
+          lowercase_realm=$(echo "${{ inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
+          echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT  
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+      - name: Pipeline Usage
+        run: |
+          echo "This workflow execution for ${{ github.event.inputs.action }} infrastructure in ${{ github.ref_name }}"
+      - name: Parse Json Input To Tfvars
+        uses: ./.github/actions/test
+        with:
+          json_param: ${{ inputs.infrastructure_json_params }}
+          tfvars_file_path: ${{github.workspace}}/deployment/terraform.tfvars
+      # - name: Inject ak/sk to config.json and backend.tf
+      #   uses: ./.github/actions/inject-credentials
+      #   env: 
+      #     SECRET_AK_VALUE: ${{ secrets[steps.set_secret_name.outputs.secret_ak] }}
+      #     SECRET_SK_VALUE: ${{ secrets[steps.set_secret_name.outputs.secret_sk] }}
+      #   with:
+      #     config_json_path: ${{github.workspace}}/deployment/config.json
+      #     target_directory: deployment
+      #     access_key: ${{ secrets.PROD_DEPLOYMENT_ACCOUNT_AK }}
+      #     secret_key: ${{ secrets.PROD_DEPLOYMENT_ACCOUNT_SK }}
+      #     target_uid: ${{ inputs.target_uid }}
+      #     ma_account_uid: ${{ secrets.PROD_MA_ACCOUNT_UID }}
+      #     env: ${{ github.ref_name }}
+      #     cicd_ak: ${{ env.SECRET_AK_VALUE }}  
+      #     cicd_sk: ${{ env.SECRET_SK_VALUE }}
+      #     stage: ${{ inputs.stage }}
+      #     ots_rd: ${{ env.OTS_RD }}
+      #     realm_name: ${{ steps.set_secret_name.outputs.lowercase_realm}}
+      #     rd: ${{ env.RD}}
+      # - name: Copy config json to default directory in user home # TODO:This step is temp solution for terraform twice assumerole, it is a product issue.After the issue being solved，the step will be deleted
+      #   run: |
+      #     cp ${{github.workspace}}/deployment/config.json ~/.aliyun/config.json
+      # - name: Terraform init
+      #   run: |
+      #     cd deployment 
+      #     cat backend.tf
+      #     terraform init
+      # - name: Terraform plan
+      #   run: |
+      #     cd deployment
+      #     if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+      #     terraform plan -var-file=terraform.tfvars  
+      #     elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+      #     terraform plan -destroy  
+      #     fi          
+      # - name: Terraform apply or destroy
+      #   id: tf_apply
+      #   run: |
+      #     cd deployment
+      #     if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+      #     terraform apply -auto-approve -no-color -input=false  
+      #     elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+      #     terraform destroy -auto-approve -no-color -input=false 
+      #     fi 
+
+      # - name: Sent workflow status to remote api
+      #   if: always()
+      #   run: | 
+      #     if [ "${{ job.status }}" == "success" ]; then
+      #     aliyun fnf ReportTaskSucceeded  --region cn-shanghai --Output '{}' --TaskToken ${{ inputs.task_token}} 
+      #     else
+      #     aliyun fnf ReportTaskFailed --region cn-shanghai --TaskToken ${{ inputs.task_token}} --Error PipelineError
+      #     fi
+
+
+  
