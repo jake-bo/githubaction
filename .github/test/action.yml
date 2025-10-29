@@ -1,0 +1,65 @@
+name: Parse Json To Tfvars
+description: Input Json String, then parse it to tfvars
+inputs:
+  json_param:
+    description: json param
+    required: true
+    default: '{}'
+  tfvars_file_path:
+    description: The absolute path of the .tfvars file
+    required: true
+    default: ${{ github.workspace }}/terraform.tfvars
+runs:
+  using: "composite"
+  steps:
+    - name: Parse Json Input To Tfvars
+      run: |
+          echo '${{inputs.json_param}}' | jq -r 'to_entries | map(
+          if .value | type == "object" then
+          "\(.key) = {\n" +
+          (.value | to_entries | map("  \"\(.key)\" = \"\(.value)\"") | join("\n")) +
+          "\n}"
+          elif .value | type == "array" then
+          if .value[0] | type == "object" then
+          "\(.key) = [\n" +
+          (.value | map(
+          "{ " +
+          (. | to_entries | map("\"\(.key)\" = \"\(.value)\"") | join(", ")) +
+          " }"
+          ) | join(",\n")) +
+          "\n]"
+          else
+          "\(.key)=\(.value | @json)"
+          end
+          else
+          "\(.key)=\(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
+            end
+          ) | .[]' > ${{inputs.tfvars_file_path}}
+          cat ${{inputs.tfvars_file_path}}
+          pwd
+          ls
+          # 将JSON转换为HCL，并保存到临时文件
+      echo '${{inputs.json_param}}' | jq -r 'to_entries | map(
+  if .value | type == "object" then
+    "  \(.key) = {\n" +
+    (.value | to_entries | map("    \"\(.key)\" = \"\(.value)\"") | join("\n")) +
+    "\n  }"
+  elif .value | type == "array" then
+    if .value[0] | type == "object" then
+      "  \(.key) = [\n" +
+      (.value | map(
+        "    { " +
+        (. | to_entries | map("\"\(.key)\" = \"\(.value)\"") | join(", ")) +
+        " }"
+      ) | join(",\n")) +
+      "\n  ]"
+    else
+      "  \(.key) = \(.value | @json)"
+    end
+  else
+    "  \(.key) = \(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
+  end
+) | join(",\n")' > temp_inputs.hcl
+
+
+      shell: bash
