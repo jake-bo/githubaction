@@ -1,0 +1,104 @@
+# GitHub Actions Workflow for Terragrunt CI/CD - Terragrunt CI/CD 工作流
+# This workflow handles infrastructure deployment using Terragrunt for multiple environments
+# 该工作流使用 Terragrunt 处理多环境的基础设施部署
+
+name: CICD-terragrunt-demo
+
+# Global environment variables - 全局环境变量
+env:
+  TERRAGRUNT_VERSION: "0.91.4"
+  TERRAFORM_VERSION: "1.11.4"
+  TERRAGRUNT_DIR: "terragrunt/infra-rd-terragrunt/resource-directories"  
+
+# Trigger condition: Manual trigger - 触发条件：手动触发
+on:
+  workflow_dispatch:
+    inputs:
+      Deployment:
+        description: 'apply or update or destroy - 部署、更新或删除资源'
+        required: true
+        type: choice
+        options:
+          - apply    # Deploy resources - 部署资源
+          - update   # Update resources - 更新资源
+          - destroy  # Destroy resources - 删除资源
+      Environment:
+        description: 'Target environment - 目标环境'
+        required: true
+        type: choice
+        options:
+          - dev      # Development environment - 开发环境
+          - prod     # Production environment - 生产环境
+            target_uid:
+        description: 'Select the account for terraform apply'
+        required: true
+        type: string
+      infrastructure_json_params:
+        description: 'require json'
+        required: true
+        type: string
+      task_token:
+        description: 'Callback to cloud flow task_token'
+        required: true
+        type: string
+      stage:
+        description: 'The account of stage'
+        required: true
+        type: string
+      realm_name:
+        description: 'use for set secret'
+        required: true
+        type: string
+nt.inputs.Deployment }}" == "destroy" ]; then
+            echo "🗑️ Starting terragrunt destroy..."
+            terragrunt destroy -auto-approve -input=false 
+          fi
+
+  # Production environment approval phase - Manual approval required
+  # 生产环境审批阶段 - 需要人工审批
+  approval-prod:
+    name: Approval Required for Production
+    needs: build-and-test  # Depends on build-and-test job successful completion - 依赖 build-and-test job 成功完成
+    # Trigger condition: environment is prod and operation is apply and previous job succeeded
+    # 触发条件：环境为 prod 且操作为 apply 且前置job成功
+    if: |
+      github.event.inputs.Environment == 'prod' &&
+      github.event.inputs.Deployment == 'apply' &&
+      needs.build-and-test.result == 'success'
+    runs-on: standard-ghc
+    environment: prod  # Use prod environment configuration (approval rules set) - 使用 prod 环境配置（已设置审批规则）
+    
+    steps:
+      - name: Wait for manual approval
+        run: echo "Prod deployment requires manual approval - 生产环境部署需要手动审批"
+
+  # Production environment deployment - Only executed after approval
+  # 生产环境部署 - 只有在审批通过后执行
+  deploy-prod:
+    name: Deploy Production
+    needs: 
+      - build-and-test    # Requires build and test success - 需要构建测试成功
+      - approval-prod     # Requires approval passed - 需要审批通过
+    # Trigger condition: environment is prod and operation is apply and all previous jobs succeeded
+    # 触发条件：环境为 prod 且操作为 apply 且所有前置job都成功
+    if: |
+      github.event.inputs.Environment == 'prod' &&
+      github.event.inputs.Deployment == 'apply' &&
+      needs.build-and-test.result == 'success' &&
+      needs.approval-prod.result == 'success'
+    runs-on: standard-ghc
+    # environment: production  # Use production environment configuration - 使用 production 环境配置
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Setup Terragrunt environment - 设置 Terragrunt 环境
+      - name: Setup Terragrunt
+        run: |
+          # Install Terraform - 安装 Terraform
+          wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          
+          cd ${{ env.TERRAGRUNT_DIR }}
