@@ -8,7 +8,7 @@ inputs:
   tfvars_file_path:
     description: The absolute path of the .tfvars file
     required: true
-    default: ${{ github.workspace }}/terraform.tfvars
+    default: ${{ github.workspace }}/temp_inputs.hcl
 runs:
   using: "composite"
   steps:
@@ -16,50 +16,32 @@ runs:
       run: |
           echo '${{inputs.json_param}}' | jq -r 'to_entries | map(
           if .value | type == "object" then
-          "\(.key) = {\n" +
-          (.value | to_entries | map("  \"\(.key)\" = \"\(.value)\"") | join("\n")) +
+          "  \(.key) = {\n" +
+          (.value | to_entries | map("    \"\(.key)\" = \"\(.value)\"") | join("\n")) +
           "\n}"
           elif .value | type == "array" then
           if .value[0] | type == "object" then
-          "\(.key) = [\n" +
+          "  \(.key) = [\n" +
           (.value | map(
-          "{ " +
+          "    { " +
           (. | to_entries | map("\"\(.key)\" = \"\(.value)\"") | join(", ")) +
           " }"
           ) | join(",\n")) +
-          "\n]"
+          "\n  ]"
           else
-          "\(.key)=\(.value | @json)"
+          "  \(.key) = \(.value | @json)"
           end
           else
-          "\(.key)=\(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
-            end
-          ) | .[]' > ${{inputs.tfvars_file_path}}
-          cat ${{inputs.tfvars_file_path}}
-          pwd
-          ls
-          # 将JSON转换为HCL，并保存到临时文件
-      echo '${{inputs.json_param}}' | jq -r 'to_entries | map(
-  if .value | type == "object" then
-    "  \(.key) = {\n" +
-    (.value | to_entries | map("    \"\(.key)\" = \"\(.value)\"") | join("\n")) +
-    "\n  }"
-  elif .value | type == "array" then
-    if .value[0] | type == "object" then
-      "  \(.key) = [\n" +
-      (.value | map(
-        "    { " +
-        (. | to_entries | map("\"\(.key)\" = \"\(.value)\"") | join(", ")) +
-        " }"
-      ) | join(",\n")) +
-      "\n  ]"
-    else
-      "  \(.key) = \(.value | @json)"
-    end
-  else
-    "  \(.key) = \(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
-  end
-) | join(",\n")' > temp_inputs.hcl
+          "  \(.key) = \(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
+          end
+          ) | join(",\n")'  > ${{inputs.tfvars_file_path}}
+          awk '
+          /__TERRAGRUNT_DYNAMIC_INPUTS__/ {
+          while ((getline line < "${{inputs.tfvars_file_path}}") > 0) {
+          print line
+          }
+          next
+          }
+          { print }
+          ' terragrunt.hcl > terragrunt.hcl.tmp && mv terragrunt.hcl.tmp terragrunt.hcl
 
-
-      shell: bash
