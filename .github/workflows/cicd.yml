@@ -43,7 +43,7 @@ jobs:
   prod-init-plan-apply:
     name: ${{ github.ref_name }} Branch Tasks
     if: github.ref_name == 'main'
-    runs-on: platform
+    runs-on: ubuntu-latest
     env:
       RD: prod
       OTS_RD: p
