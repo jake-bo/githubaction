@@ -64,7 +64,7 @@ jobs:
         uses: ./.github/actions/test
         with:
           json_param: ${{ inputs.infrastructure_json_params }}
-          tfvars_file_path: ${{github.workspace}}/deployment/terraform.tfvars
+          tfvars_file_path: ${{github.workspace}}/deployment/terragrunt.hcl
       # - name: Inject ak/sk to config.json and backend.tf
       #   uses: ./.github/actions/inject-credentials
       #   env: 
