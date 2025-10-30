@@ -5,10 +5,10 @@
 name: CICD-terragrunt-demo
 
 # Global environment variables - 全局环境变量
-env:
-  TERRAGRUNT_VERSION: "0.91.4"
-  TERRAFORM_VERSION: "1.11.4"
-  TERRAGRUNT_DIR: "terragrunt/infra-rd-terragrunt/resource-directories"  
+# env:
+#   TERRAGRUNT_VERSION: "0.91.4"
+#   TERRAFORM_VERSION: "1.11.4"
+#   TERRAGRUNT_DIR: "terragrunt/infra-rd-terragrunt/resource-directories"  
 
 # Trigger condition: Manual trigger - 触发条件：手动触发
 on:
