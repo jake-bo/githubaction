@@ -26,18 +26,18 @@ on:
         description: 'require json'
         required: true
         type: string
-      task_token:
-        description: 'Callback to cloud flow task_token'
-        required: true
-        type: string
-      stage:
-        description: 'The account of stage'
-        required: true
-        type: string
-      realm_name:
-        description: 'use for set secret'
-        required: true
-        type: string
+      # task_token:
+      #   description: 'Callback to cloud flow task_token'
+      #   required: true
+      #   type: string
+      # stage:
+      #   description: 'The account of stage'
+      #   required: true
+      #   type: string
+      # realm_name:
+      #   description: 'use for set secret'
+      #   required: true
+      #   type: string
         
 jobs: 
   prod-init-plan-apply:
