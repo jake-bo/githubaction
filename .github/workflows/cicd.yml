@@ -48,13 +48,13 @@ jobs:
       RD: prod
       OTS_RD: p
     steps:
-      - name: Dynamic processing of inputs
-        id: set_secret_name
-        run: |
-          echo "secret_ak=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
-          echo "secret_sk=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
-          lowercase_realm=$(echo "${{ inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
-          echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT  
+      # - name: Dynamic processing of inputs
+      #   id: set_secret_name
+      #   run: |
+      #     echo "secret_ak=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
+      #     echo "secret_sk=PROD_${{ inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
+      #     lowercase_realm=$(echo "${{ inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
+      #     echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT  
       - name: Checkout Source Code
         uses: actions/checkout@v4
       - name: Pipeline Usage
