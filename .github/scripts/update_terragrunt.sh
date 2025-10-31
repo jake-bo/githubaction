@@ -40,10 +40,11 @@ generate_hcl_from_json() {
         ) | join(",\n")) +
         "\n]"
         else
-        "\(.key)=\(.value | @json)"
+        # 对于简单数组，我们直接输出为HCL数组，而不是JSON字符串
+        "\(.key) = \(.value | @json)"
         end
         else
-        "\(.key)=\(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
+        "\(.key) = \(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
         end
     ) | .[]'
 }
@@ -80,6 +81,7 @@ BEGIN {
         print lines[i]
     }
     found_inputs = 1
+    output_done = 1
     next
 }
 
@@ -92,33 +94,18 @@ in_inputs && /\}/ {
     inputs_depth--
     if (inputs_depth == 0) {
         in_inputs = 0
-        # 确保在 inputs 块结束后继续处理其他内容
-        if (!output_done) {
-            print "}"
-            output_done = 1
-        }
+        # 如果inputs块结束，我们不需要再输出原来的闭合大括号，因为新的inputs块已经输出完毕
+        next
     }
-    next
 }
 
 !in_inputs {
-    if (!found_inputs && !output_done) {
-        # 如果没有找到现有的 inputs 块，在文件末尾添加
-        if (FNR == 1) {
-            # 如果是文件开始，先输出文件内容
-            print
-        } else {
-            # 保存当前行，等处理完再决定
-            buffer[FNR] = $0
-        }
-    } else {
-        print
-    }
+    print
 }
 
 END {
     if (!found_inputs) {
-        # 在文件末尾添加新的 inputs 块
+        # 如果没有找到现有的 inputs 块，在文件末尾添加
         print ""
         print "inputs = {"
         for (i in lines) {
