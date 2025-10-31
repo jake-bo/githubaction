@@ -56,7 +56,7 @@ jobs:
   # Build and Test phase - executed for all environments - 构建和测试阶段 - 所有环境都需要执行
   build-and-test:
     name: "Build & Test - ${{ github.event.inputs.Environment }}"
-    runs-on: ubuntu-lastest  
+    runs-on: ubuntu-latest  
     
     steps:
       # Step 1: Checkout code - 步骤1: 检出代码
