@@ -133,7 +133,7 @@ jobs:
           # 使用独立的脚本文件
           chmod +x ${{ github.workspace }}/.github/scripts/update_terragrunt.sh
           ${{ github.workspace }}/.github/scripts/update_terragrunt.sh '${{ github.event.inputs.infrastructure_json_params }}' 'terragrunt.hcl'
-          ls -l
+          echo nihao 
           cat terragrunt.hcl
       # # Step 8: Inject credentials to config - 步骤8: 注入凭证到配置文件
       # - name: Inject credentials to config
