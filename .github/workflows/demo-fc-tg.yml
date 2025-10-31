@@ -72,12 +72,12 @@ jobs:
       #     terraform -version
 
       # # Step 3: Install Terragrunt - 步骤3: 安装 Terragrunt
-      # - name: Install Terragrunt
-      #   run: |
-      #     wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
-      #     chmod +x terragrunt_linux_amd64
-      #     sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
-      #     terragrunt -version
+      - name: Install Terragrunt
+        run: |
+          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt -version
 
       # # Step 4: Validate directory existence - 步骤4: 验证目录是否存在
       # - name: Validate directory
