@@ -8,7 +8,7 @@ name: CICD-terragrunt-fc-tg
 env:
   TERRAGRUNT_VERSION: "0.91.4"
   TERRAFORM_VERSION: "1.11.4"
-  TERRAGRUNT_DIR: "terragrunt/terragrunt_dev/cn_shanghai/sls-terragrunt/sls"  
+  TERRAGRUNT_DIR: "sls"  
   ROLE_NAME: "resourcedirectoryaccountaccessrole" 
 
 # Trigger condition: Manual trigger - 触发条件：手动触发
@@ -56,67 +56,67 @@ jobs:
   # Build and Test phase - executed for all environments - 构建和测试阶段 - 所有环境都需要执行
   build-and-test:
     name: "Build & Test - ${{ github.event.inputs.Environment }}"
-    runs-on: standard-ghc
+    runs-on: ubuntu-lastest  
     
     steps:
       # Step 1: Checkout code - 步骤1: 检出代码
       - name: Checkout code
         uses: actions/checkout@v4
      
-      # Step 2: Install Terraform - 步骤2: 安装 Terraform
-      - name: Install Terraform
-        run: |
-          wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          unzip -q terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
-          sudo mv terraform /usr/local/bin/
-          terraform -version
+      # # Step 2: Install Terraform - 步骤2: 安装 Terraform
+      # - name: Install Terraform
+      #   run: |
+      #     wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+      #     unzip -q terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+      #     sudo mv terraform /usr/local/bin/
+      #     terraform -version
 
-      # Step 3: Install Terragrunt - 步骤3: 安装 Terragrunt
-      - name: Install Terragrunt
-        run: |
-          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
-          chmod +x terragrunt_linux_amd64
-          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
-          terragrunt -version
+      # # Step 3: Install Terragrunt - 步骤3: 安装 Terragrunt
+      # - name: Install Terragrunt
+      #   run: |
+      #     wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+      #     chmod +x terragrunt_linux_amd64
+      #     sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+      #     terragrunt -version
 
-      # Step 4: Validate directory existence - 步骤4: 验证目录是否存在
-      - name: Validate directory
-        run: |
-          if [ ! -d "${{ env.TERRAGRUNT_DIR }}" ]; then
-            echo "Error: Directory '${{ env.TERRAGRUNT_DIR }}' not found"
-            exit 1
-          fi
+      # # Step 4: Validate directory existence - 步骤4: 验证目录是否存在
+      # - name: Validate directory
+      #   run: |
+      #     if [ ! -d "${{ env.TERRAGRUNT_DIR }}" ]; then
+      #       echo "Error: Directory '${{ env.TERRAGRUNT_DIR }}' not found"
+      #       exit 1
+      #     fi
 
-      # Step 5: Dynamic processing of inputs - 步骤5: 动态处理输入参数
-      - name: Dynamic processing of inputs
-        id: set_secret_name
-        run: |
-          echo "secret_ak=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
-          echo "secret_sk=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
-          lowercase_realm=$(echo "${{ github.event.inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
-          echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT
+      # # Step 5: Dynamic processing of inputs - 步骤5: 动态处理输入参数
+      # - name: Dynamic processing of inputs
+      #   id: set_secret_name
+      #   run: |
+      #     echo "secret_ak=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
+      #     echo "secret_sk=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
+      #     lowercase_realm=$(echo "${{ github.event.inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
+      #     echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT
 
-      # Step 6: Setup environment-specific variables and dynamically build ARN - 步骤6: 根据环境设置对应的环境变量并动态构建ARN
-      - name: Setup environment-specific variables
-        id: vars
-        run: |
-          # 动态构建 ARN
-          ROLE_ARN="acs:ram::${{ github.event.inputs.AccountUID }}:role/${{ env.ROLE_NAME }}"
-          echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
-          echo "构建的 ARN: $ROLE_ARN"
+      # # Step 6: Setup environment-specific variables and dynamically build ARN - 步骤6: 根据环境设置对应的环境变量并动态构建ARN
+      # - name: Setup environment-specific variables
+      #   id: vars
+      #   run: |
+      #     # 动态构建 ARN
+      #     ROLE_ARN="acs:ram::${{ github.event.inputs.AccountUID }}:role/${{ env.ROLE_NAME }}"
+      #     echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
+      #     echo "构建的 ARN: $ROLE_ARN"
         
-          # 设置环境特定的 AK/SK
-          if [ "${{ github.event.inputs.Environment }}" == "dev" ]; then
-            echo "ACCESS_KEY=${{ secrets.DEV_MASTER_AK }}" >> $GITHUB_ENV
-            echo "SECRET_KEY=${{ secrets.DEV_MASTER_SK }}" >> $GITHUB_ENV
-            echo "DEPLOYMENT_AK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
-            echo "DEPLOYMENT_SK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
-          elif [ "${{ github.event.inputs.Environment }}" == "prod" ]; then
-            echo "ACCESS_KEY=${{ secrets.PROD_AUTOMATION_AK }}" >> $GITHUB_ENV
-            echo "SECRET_KEY=${{ secrets.PROD_AUTOMATION_SK }}" >> $GITHUB_ENV
-            echo "DEPLOYMENT_AK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
-            echo "DEPLOYMENT_SK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
-          fi
+      #     # 设置环境特定的 AK/SK
+      #     if [ "${{ github.event.inputs.Environment }}" == "dev" ]; then
+      #       echo "ACCESS_KEY=${{ secrets.DEV_MASTER_AK }}" >> $GITHUB_ENV
+      #       echo "SECRET_KEY=${{ secrets.DEV_MASTER_SK }}" >> $GITHUB_ENV
+      #       echo "DEPLOYMENT_AK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
+      #       echo "DEPLOYMENT_SK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
+      #     elif [ "${{ github.event.inputs.Environment }}" == "prod" ]; then
+      #       echo "ACCESS_KEY=${{ secrets.PROD_AUTOMATION_AK }}" >> $GITHUB_ENV
+      #       echo "SECRET_KEY=${{ secrets.PROD_AUTOMATION_SK }}" >> $GITHUB_ENV
+      #       echo "DEPLOYMENT_AK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
+      #       echo "DEPLOYMENT_SK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
+      #     fi
 
       # Step 7: Parse JSON Input and update terragrunt.hcl - 步骤7: 解析JSON输入并更新terragrunt.hcl
       - name: Parse JSON Input and update terragrunt.hcl
