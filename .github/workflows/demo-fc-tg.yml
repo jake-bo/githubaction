@@ -1,0 +1,241 @@
+# GitHub Actions Workflow for Terragrunt CI/CD - Terragrunt CI/CD 工作流
+# This workflow handles infrastructure deployment using Terragrunt for multiple environments
+# 该工作流使用 Terragrunt 处理多环境的基础设施部署
+
+name: CICD-terragrunt-fc-tg
+
+# Global environment variables - 全局环境变量
+env:
+  TERRAGRUNT_VERSION: "0.91.4"
+  TERRAFORM_VERSION: "1.11.4"
+  TERRAGRUNT_DIR: "terragrunt/terragrunt_dev/cn_shanghai/sls-terragrunt/sls"  
+  ROLE_NAME: "resourcedirectoryaccountaccessrole" 
+
+# Trigger condition: Manual trigger - 触发条件：手动触发
+on:
+  workflow_dispatch:
+    inputs:
+      Deployment:
+        description: 'apply or update or destroy - 部署、更新或删除资源'
+        required: true
+        type: choice
+        options:
+          - apply    # Deploy resources - 部署资源
+          - update   # Update resources - 更新资源
+          - destroy  # Destroy resources - 删除资源
+      Environment:
+        description: 'Target environment - 目标环境'
+        required: true
+        type: choice
+        options:
+          - dev      # Development environment - 开发环境
+          - prod     # Production environment - 生产环境
+      AccountUID:
+        description: 'Alibaba Cloud Account UID (e.g., 1172057920044171) - 阿里云账号UID'
+        required: true
+        type: string
+        default: '' # 可以设置默认值
+      infrastructure_json_params:
+        description: 'JSON parameters for dynamic inputs - 用于动态输入的JSON参数'
+        required: true
+        type: string
+      # task_token:
+      #   description: 'Callback to cloud flow task_token'
+      #   required: true
+      #   type: string
+      # stage:
+      #   description: 'The account of stage'
+      #   required: true
+      #   type: string
+      # realm_name:
+      #   description: 'use for set secret'
+      #   required: true
+      #   type: string
+
+jobs:
+  # Build and Test phase - executed for all environments - 构建和测试阶段 - 所有环境都需要执行
+  build-and-test:
+    name: "Build & Test - ${{ github.event.inputs.Environment }}"
+    runs-on: standard-ghc
+    
+    steps:
+      # Step 1: Checkout code - 步骤1: 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+     
+      # Step 2: Install Terraform - 步骤2: 安装 Terraform
+      - name: Install Terraform
+        run: |
+          wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip -q terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -version
+
+      # Step 3: Install Terragrunt - 步骤3: 安装 Terragrunt
+      - name: Install Terragrunt
+        run: |
+          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt -version
+
+      # Step 4: Validate directory existence - 步骤4: 验证目录是否存在
+      - name: Validate directory
+        run: |
+          if [ ! -d "${{ env.TERRAGRUNT_DIR }}" ]; then
+            echo "Error: Directory '${{ env.TERRAGRUNT_DIR }}' not found"
+            exit 1
+          fi
+
+      # Step 5: Dynamic processing of inputs - 步骤5: 动态处理输入参数
+      - name: Dynamic processing of inputs
+        id: set_secret_name
+        run: |
+          echo "secret_ak=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_AK" >> $GITHUB_OUTPUT
+          echo "secret_sk=${{ github.event.inputs.Environment }}_${{ github.event.inputs.realm_name }}_CICD_ACCOUNT_SK" >> $GITHUB_OUTPUT
+          lowercase_realm=$(echo "${{ github.event.inputs.realm_name }}" | tr '[:upper:]' '[:lower:]') 
+          echo "lowercase_realm=${lowercase_realm}" >> $GITHUB_OUTPUT
+
+      # Step 6: Setup environment-specific variables and dynamically build ARN - 步骤6: 根据环境设置对应的环境变量并动态构建ARN
+      - name: Setup environment-specific variables
+        id: vars
+        run: |
+          # 动态构建 ARN
+          ROLE_ARN="acs:ram::${{ github.event.inputs.AccountUID }}:role/${{ env.ROLE_NAME }}"
+          echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
+          echo "构建的 ARN: $ROLE_ARN"
+        
+          # 设置环境特定的 AK/SK
+          if [ "${{ github.event.inputs.Environment }}" == "dev" ]; then
+            echo "ACCESS_KEY=${{ secrets.DEV_MASTER_AK }}" >> $GITHUB_ENV
+            echo "SECRET_KEY=${{ secrets.DEV_MASTER_SK }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_AK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_SK=${{ secrets.DEV_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.Environment }}" == "prod" ]; then
+            echo "ACCESS_KEY=${{ secrets.PROD_AUTOMATION_AK }}" >> $GITHUB_ENV
+            echo "SECRET_KEY=${{ secrets.PROD_AUTOMATION_SK }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_AK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_AK }}" >> $GITHUB_ENV
+            echo "DEPLOYMENT_SK=${{ secrets.PROD_DEPLOYMENT_ACCOUNT_SK }}" >> $GITHUB_ENV
+          fi
+
+      # Step 7: Parse JSON Input and update terragrunt.hcl - 步骤7: 解析JSON输入并更新terragrunt.hcl
+      - name: Parse JSON Input and update terragrunt.hcl
+        run: |
+          echo "Parsing JSON parameters and updating terragrunt.hcl..."
+          cd ${{ env.TERRAGRUNT_DIR }}
+          
+          # 安装 jq（如果不存在）
+          if ! command -v jq &> /dev/null; then
+            echo "Installing jq..."
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          
+          # 使用独立的脚本文件
+          chmod +x ${{ github.workspace }}/.github/scripts/update_terragrunt.sh
+          ${{ github.workspace }}/.github/scripts/update_terragrunt.sh '${{ github.event.inputs.infrastructure_json_params }}' 'terragrunt.hcl'
+          cd ${{ env.TERRAGRUNT_DIR }}
+          cat terragrunt.hcl
+      # # Step 8: Inject credentials to config - 步骤8: 注入凭证到配置文件
+      # - name: Inject credentials to config
+      #   uses: ./.github/actions/inject-credentials
+      #   env: 
+      #     SECRET_AK_VALUE: ${{ secrets[steps.set_secret_name.outputs.secret_ak] }}
+      #     SECRET_SK_VALUE: ${{ secrets[steps.set_secret_name.outputs.secret_sk] }}
+      #   with:
+      #     config_json_path: ${{ github.workspace }}/config.json
+      #     target_directory: ${{ env.TERRAGRUNT_DIR }}
+      #     access_key: ${{ env.DEPLOYMENT_AK }}
+      #     secret_key: ${{ env.DEPLOYMENT_SK }}
+      #     target_uid: ${{ github.event.inputs.AccountUID }}
+      #     env: ${{ github.event.inputs.Environment }}
+      #     cicd_ak: ${{ env.SECRET_AK_VALUE }}  
+      #     cicd_sk: ${{ env.SECRET_SK_VALUE }}
+      #     stage: ${{ github.event.inputs.stage }}
+      #     realm_name: ${{ steps.set_secret_name.outputs.lowercase_realm }}
+
+      # # Step 9: Copy config json to default directory - 步骤9: 复制配置文件到默认目录
+      # - name: Copy config json to default directory
+      #   run: |
+      #     cp ${{ github.workspace }}/config.json ~/.aliyun/config.json
+
+      # # Step 10: Format HCL configuration files - 步骤10: 格式化 HCL 配置文件
+      # - name: Terragrunt hcl format
+      #   env:
+      #     TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+      #     ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+      #     ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+      #   run: |
+      #     cd ${{ env.TERRAGRUNT_DIR }}
+      #     terragrunt hcl format
+
+      # # Step 11: Validate Terraform configuration syntax - 步骤11: 验证 Terraform 配置语法
+      # - name: Terragrunt Validate
+      #   env:
+      #     TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+      #     ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+      #     ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+      #   run: |
+      #     cd ${{ env.TERRAGRUNT_DIR }}
+      #     terragrunt validate
+
+      # # Step 12: Initialize Terraform working directory - 步骤12: 初始化 Terraform 工作目录
+      # - name: Terragrunt Init
+      #   env:
+      #     TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+      #     ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+      #     ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+      #   run: |
+      #     cd ${{ env.TERRAGRUNT_DIR }}
+      #     terragrunt init
+
+      # # Step 13: Generate execution plan - 步骤13: 生成执行计划
+      # - name: Terragrunt Plan
+      #   env: 
+      #     ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+      #     ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+      #     TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+      #   # Execute plan for apply, update or destroy operations - 在 apply、update 或 destroy 操作时执行 plan
+      #   if: github.event.inputs.Deployment == 'apply' || github.event.inputs.Deployment == 'update' || github.event.inputs.Deployment == 'destroy'
+      #   run: |
+      #     cd ${{ env.TERRAGRUNT_DIR }}
+      #     if [ "${{ github.event.inputs.Deployment }}" == "apply" ]; then
+      #       # Plan for creating resources - 创建资源时的计划
+      #       terragrunt plan -input=false -no-color
+      #     elif [ "${{ github.event.inputs.Deployment }}" == "update" ]; then
+      #       # Plan for updating resources - 更新资源时的计划
+      #       terragrunt plan -input=false -no-color
+      #     elif [ "${{ github.event.inputs.Deployment }}" == "destroy" ]; then
+      #       # Plan for destroying resources (destroy plan) - 删除资源时的计划（destroy plan）
+      #       terragrunt plan -destroy -input=false -no-color
+      #     fi
+
+      # # Step 14: Execute deployment based on environment - 步骤14: 根据环境执行部署
+      # - name: Execute Terragrunt Deployment
+      #   env: 
+      #     ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+      #     ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+      #     TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+      #   run: |
+      #     set -e  # Exit immediately on error - 遇到错误立即退出
+      #     cd ${{ env.TERRAGRUNT_DIR }}
+          
+      #     if [ "${{ github.event.inputs.Deployment }}" == "apply" ]; then
+      #       echo "🚀 Starting terragrunt apply..."
+      #       terragrunt apply -auto-approve -input=false 
+      #     elif [ "${{ github.event.inputs.Deployment }}" == "update" ]; then
+      #       echo "🔄 Starting terragrunt apply (update)..."
+      #       terragrunt apply -auto-approve -input=false 
+      #     elif [ "${{ github.event.inputs.Deployment }}" == "destroy" ]; then
+      #       echo "🗑️ Starting terragrunt destroy..."
+      #       terragrunt destroy -auto-approve -input=false 
+      #     fi
+
+      # # Step 15: Sent workflow status to remote api
+      # - name: Sent workflow status to remote api
+      #   if: always()
+      #   run: | 
+      #     if [ "${{ job.status }}" == "success" ]; then
+      #       aliyun fnf ReportTaskSucceeded  --region cn-shanghai --Output '{"status": "success"}' --TaskToken ${{ github.event.inputs.task_token }} 
+      #     else
+      #       aliyun fnf ReportTaskFailed --region cn-shanghai --TaskToken ${{ github.event.inputs.task_token }} --Error "WorkflowFailed"
+      #     fi
