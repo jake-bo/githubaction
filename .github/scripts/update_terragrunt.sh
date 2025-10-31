@@ -21,32 +21,27 @@ BACKUP_FILE="${TERRAGRUNT_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
 cp "$TERRAGRUNT_FILE" "$BACKUP_FILE"
 echo "Backup created: $BACKUP_FILE"
 
-# 使用增强的 jq 命令生成 HCL 内容
+# 改进的 jq 命令生成 HCL 内容
 generate_hcl_from_json() {
     local json_params="$1"
     
-    echo "$json_params" | jq -r 'to_entries | map(
-        if .value | type == "object" then
-        "\(.key) = {\n" +
-        (.value | to_entries | map("  \"\(.key)\" = \"\(.value)\"") | join("\n")) +
-        "\n}"
-        elif .value | type == "array" then
-        if .value[0] | type == "object" then
-        "\(.key) = [\n" +
-        (.value | map(
-        "{ " +
-        (. | to_entries | map("\"\(.key)\" = \"\(.value)\"") | join(", ")) +
-        " }"
-        ) | join(",\n")) +
-        "\n]"
-        else
-        # 对于简单数组，我们直接输出为HCL数组，而不是JSON字符串
-        "\(.key) = \(.value | @json)"
-        end
-        else
-        "\(.key) = \(if .value | type == "string" then "\"\(.value)\"" else .value | @json end)"
-        end
-    ) | .[]'
+    echo "$json_params" | jq -r '
+    def process_value:
+        if type == "object" then
+            "{\n" + (to_entries | map("  \"\(.key)\" = \(.value | process_value)") | join("\n")) + "\n}"
+        elif type == "array" then
+            if length == 0 then "[]"
+            elif .[0] | type == "object" then
+                "[\n" + (map("{ " + (to_entries | map("\"\(.key)\" = \(.value | process_value)") | join(", ")) + " }") | join(",\n")) + "\n]"
+            else
+                "[ " + (map(if type == "string" then "\"\(.)\"" else . end) | join(", ")) + " ]"
+            end
+        elif type == "string" then "\"\(.)\""
+        else .
+        end;
+    
+    to_entries | map("\(.key) = \(.value | process_value)") | .[]
+    '
 }
 
 # 生成新的 inputs 内容
@@ -60,7 +55,7 @@ fi
 echo "Generated HCL content:"
 echo "$HCL_CONTENT"
 
-# 使用 awk 替换或添加 inputs 块
+# 使用改进的 awk 替换或添加 inputs 块
 awk -v hcl_content="$HCL_CONTENT" '
 BEGIN {
     # 将多行 HCL 内容转换为数组
@@ -68,48 +63,63 @@ BEGIN {
     in_inputs = 0
     inputs_depth = 0
     found_inputs = 0
-    output_done = 0
+    skip_original_inputs = 0
 }
 
-/^inputs = \{/ {
-    in_inputs = 1
-    inputs_depth = 1
-    # 开始输出新的 inputs 块
-    print "inputs = {"
-    # 输出生成的 HCL 内容
-    for (i in lines) {
-        print lines[i]
-    }
-    found_inputs = 1
-    output_done = 1
-    next
-}
-
-in_inputs && /\{/ {
-    inputs_depth++
-    next
-}
-
-in_inputs && /\}/ {
-    inputs_depth--
-    if (inputs_depth == 0) {
-        in_inputs = 0
-        # 如果inputs块结束，我们不需要再输出原来的闭合大括号，因为新的inputs块已经输出完毕
+# 匹配 inputs 块开始
+/^inputs[[:space:]]*=[[:space:]]*\{/ {
+    if (!in_inputs) {
+        in_inputs = 1
+        inputs_depth = 1
+        found_inputs = 1
+        skip_original_inputs = 1
+        
+        # 打印新的 inputs 块开始
+        print "inputs = {"
+        # 输出新的 HCL 内容，每行缩进两个空格
+        for (i in lines) {
+            if (lines[i] != "") {
+                print "  " lines[i]
+            }
+        }
+        # 打印闭合大括号
+        print "}"
         next
     }
 }
 
-!in_inputs {
+# 在 inputs 块内（跳过原始内容）
+skip_original_inputs && in_inputs {
+    # 计算大括号深度
+    if (/\{/) {
+        inputs_depth++
+    }
+    if (/\}/) {
+        inputs_depth--
+        # 如果深度为0，说明 inputs 块结束
+        if (inputs_depth == 0) {
+            in_inputs = 0
+            skip_original_inputs = 0
+        }
+    }
+    # 跳过原始 inputs 块内的所有内容
+    next
+}
+
+# 不在 inputs 块内的内容直接打印
+{
     print
 }
 
 END {
+    # 如果没有找到现有的 inputs 块，在文件末尾添加
     if (!found_inputs) {
-        # 如果没有找到现有的 inputs 块，在文件末尾添加
         print ""
         print "inputs = {"
         for (i in lines) {
-            print lines[i]
+            if (lines[i] != "") {
+                print "  " lines[i]
+            }
         }
         print "}"
     }
@@ -132,7 +142,19 @@ cat "$TERRAGRUNT_FILE"
 
 # 验证文件语法
 echo "Validating terragrunt.hcl syntax..."
-cd "$(dirname "$TERRAGRUNT_FILE")"
+TERRAGRUNT_DIR=$(dirname "$TERRAGRUNT_FILE")
+TERRAGRUNT_FILE_NAME=$(basename "$TERRAGRUNT_FILE")
+
+# 切换到正确的目录
+if [ -n "$TERRAGRUNT_DIR" ] && [ "$TERRAGRUNT_DIR" != "." ]; then
+    cd "$TERRAGRUNT_DIR"
+fi
+
 if command -v terragrunt &> /dev/null; then
-    terragrunt hcl format --check "$(basename "$TERRAGRUNT_FILE")" && echo "Syntax validation passed!" || echo "Syntax validation failed!"
+    # 先格式化文件
+    terragrunt hcl format "$TERRAGRUNT_FILE_NAME"
+    # 然后检查语法
+    terragrunt hcl format --check "$TERRAGRUNT_FILE_NAME" && echo "Syntax validation passed!" || echo "Syntax validation failed!"
+else
+    echo "Terragrunt not available for syntax validation"
 fi
