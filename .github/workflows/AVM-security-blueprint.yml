@@ -1,0 +1,144 @@
+name: AVM-security-blueprint
+
+# Global environment variables - 全局环境变量
+env:
+  TERRAGRUNT_VERSION: "0.91.4"
+  TERRAFORM_VERSION: "1.11.4"
+  TERRAGRUNT_DIR: "terragrunt/terragrunt_avm_${{ github.event.inputs.Environment }}/cn_shanghai/security-blueprint-terragrunt"
+  ROLE_NAME: "resourcedirectoryaccountaccessrole"
+
+# Trigger condition: Manual trigger - 触发条件：手动触发
+on:
+  workflow_dispatch:
+    inputs:
+      Deployment:
+        description: 'apply or plan or destroy - 部署、更新或删除资源'
+        required: true
+        type: choice
+        options:
+          - apply    # Deploy resources - 部署资源
+          - plan     # plan resources - 更新资源
+          - destroy  # Destroy resources - 删除资源
+      Environment:
+        description: 'Target environment - 目标环境'
+        required: true
+        type: choice
+        options:
+          - dev      # Development environment - 开发环境
+          - prod     # Production environment - 生产环境
+      AccountUID:
+        description: 'Alibaba Cloud Account UID (e.g., 1172057920044171) - 阿里云账号UID'
+        required: true
+        type: string
+        default: '1172057920044171'
+      task_token:
+        description: 'Callback to cloud flow task_token'
+        required: false
+        type: string
+
+jobs:
+  # Build and Test phase - executed for all environments - 构建和测试阶段 - 所有环境都需要执行
+  build-and-test:
+    name: "Build & Test - ${{ github.event.inputs.Environment }}"
+    runs-on: standard-ghc
+    
+    steps:
+      # Step 1: Checkout code - 步骤1: 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Terraform - 步骤2: 安装 Terraform
+      - name: Install Terraform
+        run: |
+          wget -q https://releases.hashicorp.com/terraform/${{ env.TERRAFORM_VERSION }}/terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          unzip -q terraform_${{ env.TERRAFORM_VERSION }}_linux_amd64.zip
+          sudo mv terraform /usr/local/bin/
+          terraform -version
+
+      # Step 3: Install Terragrunt - 步骤3: 安装 Terragrunt
+      - name: Install Terragrunt
+        run: |
+          wget -q https://github.com/gruntwork-io/terragrunt/releases/download/v${{ env.TERRAGRUNT_VERSION }}/terragrunt_linux_amd64
+          chmod +x terragrunt_linux_amd64
+          sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
+          terragrunt -version
+
+      # Step 4: Validate directory existence - 步骤4: 验证目录是否存在
+      - name: Validate directory
+        run: |
+          if [ ! -d "${{ env.TERRAGRUNT_DIR }}" ]; then
+            echo "Error: Directory '${{ env.TERRAGRUNT_DIR }}' not found"
+            exit 1
+          fi
+
+      # Step 5: Setup environment-specific variables and dynamically build ARN - 步骤5: 根据环境设置对应的环境变量并动态构建ARN
+      - name: Setup environment-specific variables
+        id: setup-vars
+        run: |
+          # 动态构建 ARN
+          ROLE_ARN="acs:ram::${{ github.event.inputs.AccountUID }}:role/${{ env.ROLE_NAME }}"
+          echo "ROLE_ARN=$ROLE_ARN" >> $GITHUB_ENV
+          echo "构建的 ARN: $ROLE_ARN"
+          
+          # 设置 AccountUID 环境变量
+          echo "AccountUID=${{ github.event.inputs.AccountUID }}" >> $GITHUB_ENV
+          
+          # 设置环境特定的 AK/SK
+          if [ "${{ github.event.inputs.Environment }}" == "dev" ]; then
+            echo "ACCESS_KEY=${{ secrets.DEV_MASTER_AK }}" >> $GITHUB_ENV
+            echo "SECRET_KEY=${{ secrets.DEV_MASTER_SK }}" >> $GITHUB_ENV
+          elif [ "${{ github.event.inputs.Environment }}" == "prod" ]; then
+            echo "ACCESS_KEY=${{ secrets.PROD_MASTER_AK }}" >> $GITHUB_ENV
+            echo "SECRET_KEY=${{ secrets.PROD_MASTER_SK }}" >> $GITHUB_ENV
+          fi
+
+      # Step 6: Format HCL configuration files - 步骤6: 格式化 HCL 配置文件
+      - name: Terragrunt hcl format
+        env:
+          TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+          ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+          ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+        run: |
+          cd ${{ env.TERRAGRUNT_DIR }}
+          terragrunt hcl format
+
+      # Step 7: Validate Terraform configuration syntax - 步骤7: 验证 Terraform 配置语法
+      - name: Terragrunt Validate
+        env:
+          TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+          ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+          ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+        run: |
+          cd ${{ env.TERRAGRUNT_DIR }}
+          terragrunt validate
+
+      # Step 8: Initialize Terraform working directory - 步骤8: 初始化 Terraform 工作目录
+      - name: Terragrunt Init
+        env:
+          TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+          ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+          ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+        run: |
+          cd ${{ env.TERRAGRUNT_DIR }}
+          terragrunt init
+
+      # Step 9: Generate execution plan - 步骤9: 生成执行计划
+      - name: Terragrunt Plan
+        env: 
+          ALICLOUD_ACCESS_KEY: ${{ env.ACCESS_KEY }}
+          ALICLOUD_SECRET_KEY: ${{ env.SECRET_KEY }}
+          TF_VAR_assume_role_arn: ${{ env.ROLE_ARN }}
+        # Execute plan for apply, plan or destroy operations - 在 apply、plan 或 destroy 操作时执行 plan
+        if: github.event.inputs.Deployment == 'apply' || github.event.inputs.Deployment == 'plan' || github.event.inputs.Deployment == 'destroy'
+        run: |
+          cd ${{ env.TERRAGRUNT_DIR }}
+          if [ "${{ github.event.inputs.Deployment }}" == "apply" ]; then
+            # Plan for creating resources - 创建资源时的计划
+            terragrunt plan -input=false -no-color
+          elif [ "${{ github.event.inputs.Deployment }}" == "plan" ]; then
+            # Plan for updating resources - 更新资源时的计划
+            terragrunt plan -input=false -no-color
+          elif [ "${{ github.event.inputs.Deployment }}" == "destroy" ]; then
+            # Plan for destroying resources (destroy plan) - 删除资源时的计划（destroy plan）
+            terragrunt plan -destroy -input=false -no-color
+          fi
